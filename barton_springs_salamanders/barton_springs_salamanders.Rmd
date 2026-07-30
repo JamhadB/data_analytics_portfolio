@@ -1,0 +1,502 @@
+---
+title: "Barton Springs Salamanders"
+author: "Jamhad Byers & Nick Gonzalez"
+date: "2025-03-02"
+output: html_document
+---
+
+![Image from <https://www.kut.org/austin/2017-10-16/a-remodel-hopes-to-replenish-austins-endangered-barton-springs-salamander>](https://npr.brightspotcdn.com/dims4/default/d4d9ffb/2147483647/strip/true/crop/1376x1102+0+0/resize/880x705!/quality/90/?url=http%3A%2F%2Fnpr-brightspot.s3.amazonaws.com%2Flegacy%2Fsites%2Fkut%2Ffiles%2F201710%2Fbssalf1a__2_.jpg)
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      eval = TRUE,
+                      warning = TRUE,
+                      message = FALSE,
+                      fig.align = "center",
+                      R.options = list(max.print=50))
+```
+
+------------------------------------------------------------------------
+
+## Barton Springs Salamanders
+
+[**The Barton Springs Salamanders DO and Flow**](https://data.austintexas.gov/Environment/Barton-Springs-Salamanders-DO-and-Flow/pyic-v8yf/about_data) **data-set from the City of Austin provides measurements of dissolved oxygen (DO) and spring flow rates at Barton Springs, an important habitat for the endangered Barton Springs Salamander (Eurycea sosorum). The data-set includes time-series records of DO concentrations (in mg/L) and spring flow (in cubic feet per second) collected from various sites within the Barton Springs complex. These environmental factors are critical indicators of water quality and habitat health for the salamander population. By analyzing trends in DO levels and flow rates, researchers and conservationists can assess the impact of environmental changes, groundwater conditions, and human activity on the ecosystem.**
+
+**This dataset is interesting do to its relevance in the broader conversation about climate change and the methods used to keep track of the nuanced and widespread effects. For our purposes here, the data will be used to asses dissolved oxygen levels, salamander counts, flow severity, and sample areas of four sights in the Austin area. Each row represents a measurement on a particular day at a particular site.**
+
+### Original Variables
+
+> `site_name` is, as the name suggest, the name of the site for that particular instance of data collection.
+
+> `sample_date` is also as it's name suggest, in that it list the date that sample was taken.
+
+> `parameter` `result` & `unit` are the measurement, numeric value of that measurement, and the units of that measurement respectively
+
+### Created Variables
+
+> `DO` is created from the `Dissolved Oxygen` value in `PARMETER`, and contains the numeric values of the measurement.
+
+> `Flowcode` is created from the `FLOW SEVERITY CODE (1=NONE;2=LOW;3=NORM;4=FLOOD;5=HIGH;6=DRY)` value in `PARMETER`, and is categorical representation by the Texas Commission on Enviornmental Quality (TCEQ) of the type of flow observed. The numbers correspond to their listed type.
+
+> `salamanders` is created from the `NUMBER OF AUSTIN BLIND SALAMANDERS PHOTOGRAPHED` value in \`PARMETER\`\`, and is a count of how many salamanders were seen during that particular measurement.
+
+> Finally, `area` is created from the `AREA SAMPLED` value in `PARMETER`, and is a measure of the total square footage that was survied for a particular site on a particular day.
+
+The data is provided by the [Barton Springs Salamanders DO and Flow data-set from the City of Austin](https://data.austintexas.gov/Environment/Barton-Springs-Salamanders-DO-and-Flow/pyic-v8yf/about_data) and is a "view" of the Water Quality Sampling Data dataset - in that the Parameters and sites and projects are limited to those related to this particular subject (Barton Springs Salamanders, Flow and DO).
+
+Before cleaning, the set contains 50,068 rows and 22 columns.
+
+------------------------------------------------------------------------
+
+## Methods
+
+Our primary research questions are as follows;
+
+> 1.) Does water Filter Fraction (FILTER), which refers to whether the water sample was filtered before it was analyzed, influence the Dissolved Oxygen (in mg/L) measurements?
+
+> 2.) How do dissolved oxygen (DO) levels vary across different spring sites, and what is their relationship with seasonal changes?
+
+### Loading Packages
+
+```{r}
+# Upload / install packages
+library(tidyverse)
+library(plotROC) 
+```
+
+### Importing the Data
+
+```{r water}
+water <- read_csv("Barton_Springs_Salamanders_DO_and_Flow_20250305.csv")
+
+# data preview
+head(water)
+summary(water)
+```
+
+### Choosing 4 Sites for Analysis
+
+```{r}
+# site options
+unique(water$SITE_NAME)
+```
+
+**Our analysis will focus on the Barton Spring, Eliza Spring, Old Mill (Sunken Gardens) Spring, and Upper Barton Spring sites.**
+
+### Understanding Filter Fraction
+
+```{r}
+unique(water$FILTER)
+```
+
+**"Total" samples includes everything, from dissolved stuff tp particles floating in the sample (suspended solids). "Dissolved" samples only include the dissolved substances, the sample is passed through a filter first, which removes solids. "N/A" is currently unknown.**
+
+### Choosing Parameters to Review
+
+The paramters variable is a representation of what measurement was taken for that row. Here, we display all available measurements for analysis in the dataset
+
+```{r}
+# list of parameters
+unique(water$PARAMETER)
+```
+
+**The definitions of these were privded by Mr. Robert Clayton from the City of Austin Watershed Protection Department. For this analysis, the measurments of interest include `DISSOLVED OXYGEN`, `FLOW SEVERITY CODE (1=NONE;2=LOW;3=NORM;4=FLOOD;5=HIGH;6=DRY)`, `NUMBER OF AUSTIN BLIND SALAMANDERS PHOTOGRAPHED`, and `AREA SAMPLED`.**
+
+### Associated Units List
+
+The units of interest all correspond to the measurements of interest, so we removed all unnecessary unit types from the dataset for analysis
+
+```{r}
+unique(water$UNIT)
+```
+
+**The units of interest are "MG/L", "Sq Ft", "None", and "Count". "None" is there for the flowcode category.**
+
+### Data Cleaning
+
+After reviewing the original dataset and what is important for analysis, the following is the cleaning done to achieve the desired new dataset to work with.
+
+```{r}
+# cleaned data, all managed in one spot and edited throughout the analysis
+water_cleaned <- water |>
+  # removing redundancy
+  pivot_wider( 
+      # the values of the variable `parameter` will become variables 
+      names_from = PARAMETER, 
+      # the cell values values of `result` will match the corresponding variable
+      values_from = RESULT) |>
+  # selecting variables for analysis and changing names
+  select(
+    sampledate = `SAMPLE_DATE`,
+    site = `SITE_NAME`,
+    DO = `DISSOLVED OXYGEN`,
+    Flowcode = "FLOW SEVERITY CODE (1=NONE;2=LOW;3=NORM;4=FLOOD;5=HIGH;6=DRY)",
+    salamanders = "NUMBER OF AUSTIN BLIND SALAMANDERS PHOTOGRAPHED",
+    area = "AREA SAMPLED",
+    units = UNIT,
+    filter = FILTER
+  ) |>
+  # fixing sampledate format
+  mutate(
+    sampledate = as_datetime(mdy_hms(sampledate))
+  ) |>
+  # choosing specific sites
+  filter(site == c("Barton Spring",
+                   "Eliza Spring",
+                   "Old Mill (Sunken Gardens) Spring",
+                   "Upper Barton Spring"),
+         # removing unused units
+         units != "Minutes", 
+         units != "gal/min",
+         units != "Cubic Feet Per Second",
+         units != "1-2: (Yes; No)",
+         units != "(%) Percent",
+         units != "Inches",
+         units != "Feet",
+         units != "MM",
+         units != "Feet per second")
+```
+
+------------------------------------------------------------------------
+
+## Results
+
+#### Summary Stats
+
+```{r}
+summary(water_cleaned$DO)
+
+water_cleaned |>
+  group_by(filter) |>
+  count(n()) |>
+  select(filter, 'count' = n)
+```
+
+#### Dissolved Oxygen
+
+Given the three categories of `filter`, what are their `DO` value distributions measured in mg/L?
+
+```{r}
+water_cleaned |>
+  filter(units == "MG/L") |>
+  ggplot() +
+  geom_histogram(aes(x = DO, fill = filter), alpha = 0.7) +
+  labs(title = "Dissolved Oxygen Distributions by Filter Fraction Category",
+       x = "Dissolved Oxygen",
+       y = "Frequency",
+       caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
+```
+
+**This clearly shows that all of the filter fraction categories have similar ranges--excluding outliers from "Dissolved"--just that N/A and Total have fewer measurments in their pools. This makes sense because (waiting for respoonse from MR. Clayton)**
+
+Before directly addressing how dissolved oxygen (DO) levels vary across different spring sites, and what is their relationship with seasonal changes is, it is important to know some things about the sites themselves. First, we looked at what the variation in areas sampled for each site looked like
+
+```{r}
+water_cleaned |>
+  filter(units == "Sq Ft") |>
+  ggplot() +
+  geom_histogram(aes(x = area, fill = site), alpha = 0.7) +
+  facet_wrap(~site) +
+  labs(title = "Variation in Survey Area by Site",
+       x = "Area",
+       y = "Frequency",
+       caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
+
+water_cleaned |>
+  filter(units == "Sq Ft") |>
+  group_by(site) |>
+  ggplot() +
+  geom_boxplot(aes(y = area, fill = site), alpha = 0.7) +
+  labs(title = "Variation in Survey Area by Site",
+       x = "Site",
+       y = "Area",
+       caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
+```
+
+**While the areas sampled for Eliza, Old Mill (Sunken Garden), and Upper Barton Springs were relatively consistent, Barton Spring's sample areas were much more spread, and also had the greatest outlier among them all.**
+
+We were then interested in the when theses surveys took place, and if anything could be noticed to that helps explain the Barton Springs outliers
+
+```{r}
+water_cleaned |>
+  filter(units == "Sq Ft") |>
+  ggplot() +
+  geom_point(aes(x = sampledate, y = area, color = site), alpha = 0.2) +
+  facet_wrap(~site) 
+
+water_cleaned |>
+  filter(units == "Sq Ft") |>
+  filter(site == "Barton Spring") |>
+  ggplot() +
+  geom_point(aes(x = sampledate, y = area, color = site), alpha = 0.5)
+```
+
+Taking a closer look at the 3 highest area surveys for Barton Spring
+
+```{r}
+# Check high values of area
+water_cleaned |>
+  slice_max(n = 3, area)
+```
+
+**The highest survey area for Barton Spring is 6750 Sq Ft, taking place on the 3 different occasions listed.**
+
+With the exception of Barton Spring, most the sites have consistent survey areas. How do their dissolved oxygen levels vary over time?
+
+```{r}
+water_cleaned |>
+  group_by(site) |>
+  ggplot() +
+  geom_point(aes(x = sampledate, y = DO, color = site), alpha = 0.6)
+```
+
+**DO levels relatively similar and do not vary much over time, with a few exceptions for Barton and Eliza Springs. DO variation by site?**
+
+```{r}
+# log10(DO) by site
+water_cleaned |>
+  group_by(site) |>
+  ggplot() +
+  geom_boxplot(aes(y = DO, color = site), alpha = 0.6)
+```
+
+**DO variation for each site seems smallest for Upper Barton Spring, and a bit wider for the others.**
+
+#### Salamanders
+
+```{r}
+water_cleaned |>
+  summarize("Total salamander count" = sum(salamanders, na.rm = T))
+```
+
+**A total of 16 salamanders were counted across the entire dataset. This is not to say that there exist 16 salamanders in total though, as several are likely repeated counts over time.**
+
+How is this distributed by region?
+
+```{r}
+water_cleaned |>
+  group_by(site) |>
+  ggplot() +
+  geom_point(aes(x = sampledate, y = salamanders, color = site), alpha = 0.6)
+```
+
+**seems like the salamander counting for this view does not start until around 2015, or that there were no salamanders to count until then, and that they like Eliza Spring to most.**
+
+**Barton Spring surprisingly lower than average DO when compared to the other springs.**
+
+Given this is the case, Does flow perhaps effect DO?
+
+```{r}
+water_cleaned |>
+  ggplot() +
+  geom_histogram(aes(y = Flowcode, fill = site), alpha = 0.6) +
+  facet_wrap(~site)
+```
+
+**Seems a little like, for the variables we are interested in, Barton and Eliza Springs are over represented in the data. Let's check for sampling country for each**
+
+```{r}
+water_cleaned |>
+  group_by(site) |>
+  filter(units == "MG/L") |>
+  ggplot() +
+  geom_bar(aes(x = site))
+```
+
+**And wouldn't you believe it, they are indeed the most sampled sites from this view. lets check where salamanders are being looked for the most**
+
+```{r}
+water_cleaned |>
+  group_by(site) |>
+  filter(salamanders != 0) |>
+  ggplot() +
+  geom_bar(aes(x = site))
+```
+
+Well this is odd... salamander count by spring?
+
+```{r}
+water_cleaned |>
+  filter(salamanders != 0) |>
+  ggplot() +
+  geom_histogram(aes(x = salamanders, fill = site), alpha = 0.7) +
+  facet_wrap(~site) +
+  labs(title = "Salamander Count Distributions by Spring",
+       x = "Salamander Count",
+       y = "Frequency",
+       caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
+```
+
+Wow, there really are only 2 sites that have salamanders confirmed to be in them from this data. It's possible the other sites we chose to ignore here have more but... this is pretty interesting. I also wanted to look at flowcodes for each over time
+
+```{r}
+water_cleaned |>
+  group_by(site) |>
+  ggplot() +
+  geom_point(aes(x = sampledate, y = Flowcode, color = site)) +
+  facet_wrap(~site) +
+  labs(title = "Flowcode Distributions by Spring",
+       x = "Flowcode",
+       y = "Frequency",
+       caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
+```
+
+typical flowcode distributions for each
+
+```{r}
+water_cleaned |>
+  group_by(site) |>
+  ggplot() +
+  geom_histogram(aes(x = Flowcode, fill = site)) +
+  facet_wrap(~site) +
+  labs(title = "Flowcode Distributions by Spring",
+       x = "Flowcode",
+       y = "Frequency",
+       caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
+```
+
+Nick's Model
+
+```{r}
+# Getting rid of NA values
+model_water <- water_cleaned |>
+  filter(!is.na(DO))
+# Fit model
+lin_model <- lm(DO ~ sampledate + site, data = model_water)
+summary(lin_model)
+```
+
+```{r}
+# Calculating RMSE
+sqrt(mean(resid(lin_model)^2))
+```
+
+```{r}
+# Number of folds
+k = 5
+
+# Setting a seed
+set.seed(322)
+
+# Randomly order rows in the dataset
+shuffled_data <- model_water[sample(nrow(model_water)),]
+
+# Create k folds in the dataset
+shuffled_data <- shuffled_data |>
+  mutate(folds = cut(seq(1:nrow(shuffled_data)), breaks = k, labels = FALSE))
+
+# Initialize a vector to keep track of the performance for each k-fold
+perf_k <- NULL
+
+# Use a for-loop to get performance for each k-fold
+for(i in 1:k){
+  # Split data into train and test data 
+  train_i <- shuffled_data |> filter(folds != i) #train data = all observations except in fold i
+  test_i <- shuffled_data |> filter(folds == i) # test data = observations in fold i
+  
+  # Train model on train data (all but fold i)
+  train_model <- lm(DO ~ site + sampledate, 
+                    data = train_i)
+
+  # Performance listed for each test data = fold i
+  sal_per <- ggplot(test_i) +
+    geom_roc(aes(
+      # Outcome is DO
+      d = DO,
+      # Probability of Pokemon legendary status on logistic model
+      m = predict(train_model, newdata = test_i)[ ,2]))
+  # Save the AUC values
+  perf_k[i] <- sqrt(mean(resid(train_model)^2))
+}
+
+# Performance for each fold
+perf_k
+
+# Average performance over all k folds
+mean(perf_k)
+```
+
+My Model
+
+```{r}
+# Getting rid of NA values
+model_water2 <- water_cleaned |>
+  filter(!is.na(salamanders))
+# Fit model
+lin_model2 <- lm(salamanders ~ sampledate + site, data = model_water2)
+summary(lin_model2)
+```
+
+```{r}
+# Calculating RMSE
+sqrt(mean(resid(lin_model2)^2))
+```
+
+```{r}
+# Number of folds
+k = 5
+
+# Setting a seed
+set.seed(322)
+
+# Randomly order rows in the dataset
+shuffled_data <- model_water2[sample(nrow(model_water2)),]
+
+# Create k folds in the dataset
+shuffled_data <- shuffled_data |>
+  mutate(folds = cut(seq(1:nrow(shuffled_data)), breaks = k, labels = FALSE))
+
+# Initialize a vector to keep track of the performance for each k-fold
+perf_k <- NULL
+
+# Use a for-loop to get performance for each k-fold
+for(i in 1:k){
+  # Split data into train and test data 
+  train_i <- shuffled_data |> filter(folds != i) #train data = all observations except in fold i
+  test_i <- shuffled_data |> filter(folds == i) # test data = observations in fold i
+  
+  # Train model on train data (all but fold i)
+  train_model <- lm(salamanders ~ site + sampledate, 
+                    data = train_i)
+
+  # Performance listed for each test data = fold i
+  sal_per <- ggplot(test_i) +
+    geom_roc(aes(
+      # Outcome is salamanders
+      d = salamanders,
+      # Probability of Pokemon legendary status on logistic model
+      m = predict(train_model, newdata = test_i)[ ,2]))
+  # Save the AUC values
+  perf_k[i] <- sqrt(mean(resid(train_model)^2))
+}
+
+# Performance for each fold
+perf_k
+
+# Average performance over all k folds
+mean(perf_k)
+```
+
+```{r}
+water_cleaned |>
+  filter(salamanders != 0) |>
+  ggplot() +
+  geom_point(aes(y = salamanders, x = sampledate, color = site), alpha = 0.7) +
+  facet_wrap(~site) +
+  labs(title = "Salamander Measurements by Spring",
+       x = "Time",
+       y = "Salamander Count",
+       caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
+
+summary(water_cleaned$salamanders)
+
+water_cleaned |>
+  filter(!is.na(salamanders)) |>
+  count(n())
+```
+
+## Discussion
+
+## Reflection, Acknowledgements, & References. Measurement
+
+Huge thank you to [Mr.Robert Clayton](mailto:robert.clayton@austintexas.gov){.email}, who's help was integral to this work

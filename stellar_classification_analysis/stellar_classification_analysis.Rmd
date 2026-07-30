@@ -1,0 +1,387 @@
+---
+title: "Stellar Classification and Redshift: A Deeper Analysis of SDSS Data"
+author: "Jamhad Byers"
+date: "2025-02-21"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      eval = TRUE,
+                      warning = TRUE,
+                      message = FALSE,
+                      fig.align = "center",
+                      R.options = list(max.print=50))
+```
+
+------------------------------------------------------------------------
+
+# About the Data
+
+The Star Classification Dataset is sourced from the Sloan Digital Sky Survey (SDSS) and contains detailed observational data on celestial objects, including stars, galaxies, and quasars. Among the included measurements are right ascension (RA), declination, redshift, and object classification, which are essential for understanding the structure and expansion of the universe. The primary objective of this analysis on the dataset is to categorize celestial objects based on their spectral properties and to analyze how their positions and redshift values relate to their classification. By studying these relationships, insights into the large-scale distribution of galaxies, cosmic evolution, and the physical processes driving the movement of celestial bodies can be gleamed. This dataset is widely used in astrophysics research, machine learning applications, and statistical analysis to further explore patterns in space and refine classification models for astronomical objects. For completeness, I will list all variables in the data-set now:
+
+-   obj_ID = Object Identifier, the unique value that identifies the object in the image catalog used by the CAS.
+
+-   alpha = Right Ascension angle (at J2000 epoch). This is the angle (in degrees) between the Vernal Equinox and the desired point on the celestial sphere.
+
+-   delta = Declination angle (at J2000 epoch). The is the angle (in degrees) between the celestial equator and the desired point on the celestial sphere.
+
+-   u = Ultraviolet filter in the photometric system. 3543 Angstroms (354.3 nm)
+
+-   g = Green filter in the photometric system. 4770 Angstroms (477.0 nm)
+
+-   r = Red filter in the photometric system. 6231 Angstroms (623.1 nm)
+
+-   i = Near Infrared filter in the photometric system. 7625 Angstroms (762.5 nm)
+
+-   z = Infrared filter in the photometric system. 9134 Angstroms (913.4 nm)
+
+-   run_ID = Run Number used to identify the specific scan.
+
+-   rerun_ID = Rerun Number to specify how the image was processed.
+
+-   cam_col = Camera column to identify the scanline within the run.
+
+-   field_ID = Field number to identify each field.
+
+-   spec_obj_ID = Unique ID used for optical spectroscopic objects (this means that 2 different observations with the same spec_obj_ID must share the output class).
+
+-   class = Object class (galaxy, star, or quasar object).
+
+-   redshift = Redshift value based on the increase in wavelength. The more red shifted light is, the further it has traveled from its point of origin
+
+-   plate = Plate ID, identifies each plate in SDSS.
+
+-   MJD = Modified Julian Date, used to indicate when a given piece of SDSS data was taken.
+
+-   fiber_ID = Fiber ID that identifies the fiber that pointed the light at the focal plane in each observation.
+
+------------------------------------------------------------------------
+
+# Questions for the Analysis
+
+> 1.  Does the right ascension (RA) of a celestial object correlate with its redshift?
+
+> 2.  Does the classification of an object (star vs. non-star) significantly affect its redshift?
+
+> 3.  Are stellar classification (Is_star) and redshift category (low/mid/high) independent of one another?
+
+> 4.  Is object class (STAR, GALAXY, QUASAR) a confounding variable in the relationship between RA and redshift?
+
+Note: This analysis is an extension of one that I have done before, examining the dataset further using chi squared 
+test, t-test, and better modeling. You can find my first examination of this dataset here:
+
+https://www.kaggle.com/code/jamhadbyers/stellar-classification-analysis
+
+I was much rustier back then.
+
+------------------------------------------------------------------------
+
+# Loading Packages
+
+```{r, warning=FALSE}
+library(tidyverse)
+```
+
+# Importing and Preparing the Data
+
+```{r pressure, echo=FALSE}
+stellar_class <- read.csv("star_classification.csv")
+
+# data preview
+head(stellar_class)
+```
+
+## Data Cleaning
+
+```{r data cleaning}
+sc_focus <- stellar_class |>
+  mutate(Is_star = case_when(
+    (class == "STAR") ~ "Yes",
+    (class != "STAR") ~ "No")) |>
+  select("RightAscension" = alpha,
+         Is_star,
+         "Redshift" = redshift,
+         "Class" = class)
+
+head(sc_focus)
+```
+
+------------------------------------------------------------------------
+
+# Data Exploration
+
+## Redshift Distribution
+
+I started by just wanting to understand the two main numeric variables in isolation.
+What does redshift look like across the whole dataset, and what does right ascension look like? 
+
+```{r}
+sc_focus |>
+  ggplot() +
+  geom_histogram(aes(x = Redshift), binwidth = 0.1, color = "white")
+  labs(
+    title = "Distribution of Redshift for Stellar Objects",
+    x = "Redshift",
+    y = "Frequency",
+    caption = "Data from the Sloan Digital Sky Survey DR17"
+  )
+```
+
+Redshift is the primary outcome variable of interest, so the first step is simply understanding its distribution. The histogram reveals a strong right skew. This suggests that the majority of observed objects are relatively nearby to Earth, with a smaller subset at extreme distances. This skew is worth keeping in mind when interpreting hypothesis tests later. The median and inner quartile range are the appropriate measures of the average and spread respectively due to the skewness of the distribution.
+
+Median and IQR for Redshift:
+
+```{r}
+median(sc_focus$Redshift)
+IQR(sc_focus$Redshift)
+```
+
+## Right Ascension Distribution
+
+With redshift characterized, the next step is examining right ascension, the other continuous variable in the analysis. The histogram shows how the SDSS observations are distributed across the sky, which is worth understanding before drawing any conclusions about RA's relationship with redshift. Uneven sky coverage could produce misleading correlations later.
+
+```{r}
+sc_focus |>
+  ggplot(aes(x = RightAscension)) +
+  geom_histogram(aes(fill = ..count..), binwidth = 5, center = 2.5, color = "white") +
+  scale_fill_gradient(low = "blue", high = "purple") +
+  labs(
+    title = "Distribution of Right Ascension for Stellar Objects",
+    x = "Right Ascension (in degrees)",
+    y = "Frequency",
+    caption = "Data from the Sloan Digital Sky Survey DR17"
+  )
+```
+
+What was really weird to me were those, what I call 'columns of emptiness' in the graph. I had and still have little understanding of how this could be. I should also point out that the furthest left and furthest right of the graph loops back around (because this is a 360 degree ball we live on).
+
+
+Summary statistics for Right Ascension:
+
+```{r}
+summary(sc_focus$RightAscension)
+```
+
+## Right Ascension vs. Redshift
+
+Having looked at each variable individually, the natural next question is whether they are related. Physics and statistics gave me the hunch that the answer should be no. The scatterplot displays every object's position against its redshift. If RA were a strong predictor of redshift, we'd expect some visible trend or clustering. Instead, the plot appears largely scattered, which is an early hint that the relationship may be weak. This begins to affirm my previous predictions.
+
+```{r}
+sc_focus |>
+  ggplot() +
+  geom_point(aes(x = RightAscension, y = Redshift, color = Redshift)) +
+  scale_color_gradient(low = "blue", high = "red") +
+  labs(
+    title = "Right Ascension vs Redshift",
+    x = "Right Ascension (in degrees)",
+    y = "Redshift",
+    caption = "Data from the Sloan Digital Sky Survey DR17"
+)
+```
+
+## Celestial Classification Distribution
+
+Before comparing groups, it's important to know how balanced they are. This bar chart shows the raw counts of stars vs. non-stars in the dataset, confirming that non-stars make up the majority of observations. This is of course incredibly intuitive when one considers that there are may more non-star celestial bodies in the universe than stars.
+
+```{r}
+sc_focus |>
+  ggplot() +
+  geom_bar(aes(x = Is_star, fill = Is_star)) +
+  scale_fill_manual(values = c("Yes" = "blue", "No" = "red")) +
+  labs(
+    x = "Is a Star?",
+    y = "Count",
+    title = "Distribution of Stars vs Non-Stars",
+    caption = "Data from the Sloan Digital Sky Survey DR17")
+
+table(sc_focus$Is_star)
+```
+
+## Class vs. Redshift
+
+With the group sizes established, we can now ask the core question: do stars and non-stars differ in redshift? The boxplot makes the answer visually obvious. Non-stars have substantially higher redshift values and much greater spread, while stars cluster tightly near zero.
+
+```{r}
+sc_focus |>
+  ggplot() +
+  geom_boxplot(aes(x = Is_star, y = Redshift, fill = Is_star)) +
+  labs(
+    x = "Is a Star?",
+    y = "Redshift",
+    title = "Celestial Classification vs Redshift",
+    caption = "Data from the Sloan Digital Sky Survey DR17"
+  )
+```
+
+
+```{r}
+summary(sc_focus)
+```
+
+------------------------------------------------------------------------
+
+# Analysis
+
+## Is_star vs. Redshift Category: Chi-Squared Test
+
+To examine whether stellar classification and redshift are related categorically, we first bin redshift into three groups based on tertiles (three equal parts split): low, mid, and high. These groups will allow us to preform a chi squared test in order to statistically determine whether or not stellar classification and redshift are independent variables. This is the case if stellar classifications are distributed evenly across redshift groups.
+
+```{r}
+sc_focus <- sc_focus |>
+  mutate(Redshift_group = cut(Redshift,
+                              breaks = quantile(Redshift, probs = c(0, 1/3, 2/3, 1)),
+                              labels = c("Low", "Mid", "High"),
+                              include.lowest = TRUE))
+
+# Contingency table
+redshift_table <- table(sc_focus$Is_star, sc_focus$Redshift_group)
+print(redshift_table)
+```
+
+Here, we run the test using an R provided tool.
+
+```{r}
+chisq.test(redshift_table)
+```
+
+The chi-squared test yields a p-value well below 0.01, providing strong statistical evidence that stellar classification and redshift category are **not independent**. Stars are heavily concentrated in the low redshift group, while non-stars (galaxies and quasars) are far more spread across mid and high redshift categories. This makes sense physically, as photons from close stars would reach the earth faster and more often than other objects further in the intergalactic medium.
+
+A mosaic plot reinforces the chi-squared result visually.
+
+```{r}
+mosaicplot(redshift_table,
+           main = "Mosaic Plot: Is_star vs. Redshift Group",
+           xlab = "Is a Star?",
+           ylab = "Redshift Group",
+           color = c("lightgreen", "lightyellow", "lightblue"))
+```
+
+The width of each column is proportional to the number of objects in that group. The "Yes" (star) column is much narrower, showing stars are a smaller portion of the dataset. Moreover, nearly the entire star column is consumed by the Low redshift group, with the Mid and High cells reduced to almost invisible slivers at the bottom. Non-stars, by contrast, are distributed fairly evenly across all three redshift categories. This stark asymmetry is what drives a significant chi-squared result. If the two variables were independent, we'd expect the redshift group proportions to look roughly the same within each column.
+
+
+## Two-Sample Hypothesis Test: Redshift by Is_star
+
+I now test whether the mean redshift differs significantly between stars and non-stars using a two-sample t-test. It should again be obvious that the is. This test confirms that statistically.
+
+```{r}
+# summary stats by group
+sc_focus |>
+  group_by(Is_star) |>
+  summarise(
+    n = n(),
+    Mean_Redshift = mean(Redshift),
+    SD_Redshift = sd(Redshift),
+    Median_Redshift = median(Redshift)
+  )
+```
+
+```{r}
+t.test(Redshift ~ Is_star, data = sc_focus)
+```
+
+And with that, a confirmed statistically significant difference (p < 0.05) in mean redshift between stars and non-stars. Non-stars have substantially higher average redshift values, consistent with what we saw in the boxplots. However, before drawing strong conclusions, we should consider whether the non-star group is itself homogeneous.
+
+## Identifying a Confounding Variable: Object Class
+
+The binary `Is_star` variable puts galaxies and quasars into a single "No" group. However, these two object types behave very differently. Quasars are among the most distant and highly redshifted objects in the universe, while galaxies have more moderate redshifts. Object class (`STAR`, `GALAXY`, `QUASAR`) is therefore a candidate confounding variable.
+
+We can visualize this directly:
+
+```{r}
+sc_focus |>
+  ggplot() +
+  geom_boxplot(aes(x = Class, y = Redshift, fill = Class)) +
+  scale_fill_manual(values = c("GALAXY" = "steelblue", "QUASAR" = "tomato", "STAR" = "gold")) +
+  labs(
+    x = "Object Class",
+    y = "Redshift",
+    title = "Redshift by Object Class (GALAXY / QUASAR / STAR)",
+    caption = "Data from the Sloan Digital Sky Survey DR17"
+  )
+```
+
+```{r}
+# summary stats by full class
+sc_focus |>
+  group_by(Class) |>
+  summarise(
+    n = n(),
+    Mean_Redshift = mean(Redshift),
+    SD_Redshift = sd(Redshift),
+    Median_Redshift = median(Redshift)
+  )
+```
+
+The boxplot makes the confounding effect clear: quasars have dramatically higher redshift values than both galaxies and stars. A model using only `Is_star` would attribute all of the non-star redshift variance to the star/non-star distinction, when in fact much of it is driven by the quasar subgroup specifically. To compensate for this, we include `Class` as a three-level factor in a multivariate regression model.
+
+## Multivariate Regression
+
+### Original Model (Is_star)
+
+```{r}
+my_model <- lm(Redshift ~ RightAscension + Is_star, data = sc_focus)
+summary(my_model)
+```
+
+The adjusted R² of 0.1716 indicates that this model explains only about 17% of the variance in redshift, making the model trash. While Is_star Yes is highly significant (p < 0.001), the binary classification is not enough to capture the full picture. The "No" group lumps galaxies and quasars together despite their very different redshift behaviors, leaving substantial variance unaccounted for. This motivates the expanded model, which replaces the binary indicator with the full three-level object class variable.
+
+```{r}
+sc_focus$yhat <- my_model$fitted.values
+
+ggplot(sc_focus, aes(x = RightAscension, y = Redshift, col = Is_star, shape = Is_star)) +
+  geom_point() +
+  xlab("Right Ascension") +
+  ylab("Redshift") +
+  labs(col = "Is Star", shape = "Is Star") +
+  ggtitle("Redshift by Right Ascension and Celestial Classification") +
+  scale_color_manual(values = c("pink", "purple")) +
+  geom_line(aes(y = yhat)) +
+  theme_classic()
+
+plot(my_model$residuals, my_model$fitted.values,
+     main = "Residuals vs Fitted: Original Model",
+     ylab = "Residuals", xlab = "Fitted Values",
+     pch = 19, col = rgb(0, 0, 0, alpha = 0.1))
+abline(h = 0, col = "red", lty = 2)
+```
+
+The residuals vs. fitted plot reveals another clear problem with this model. Rather than a random scatter around zero, the residuals form two distinct horizontal bands with one near zero (stars, whose redshift the model predicts reasonably well) and one sitting far above (non-stars, where the model systematically underpredicts). This banding pattern indicates that the binary Is_star variable is too coarse: the model is essentially predicting just two values for the entire dataset, and the large non-star band reflects all the variance within that group that goes unexplained. This further motivates replacing the binary indicator with the full three-level class variable in the expanded model.
+
+### Expanded Model (Class as Confounder)
+
+We now replace the binary `Is_star` indicator with the full three-level `Class` factor, which allows the model to distinguish between the redshift behavior of galaxies and quasars separately.
+
+The releveling part I had to look up: [releveling](https://stackoverflow.com/questions/67828734/relevel-factors-and-reorder-factors-using-tidyverse-in-r)
+
+```{r}
+# relevel so STAR is the reference category
+sc_focus$Class <- factor(sc_focus$Class, levels = c("STAR", "GALAXY", "QSO"))
+
+expanded_model <- lm(Redshift ~ RightAscension + Class, data = sc_focus)
+summary(expanded_model)
+```
+
+The expanded model represents a substantial improvement over the original, with the adjusted R² rising from 0.1716 to 0.6254. This means the model now explains roughly 62% of the variance in redshift. Both ClassGALAXY and ClassQSO are highly significant (p < 0.001), and their coefficient estimates say relative to the star baseline, galaxies have a redshift about 0.42 units higher on average, while quasars are about 1.72 units higher. This being nearly four times the galaxy effect. Despite this improvement, 38% of variance remains unexplained. This is likely because redshift varies enormously even within object classes, particularly among quasars, and the remaining predictors in this model are insufficient to capture that within-class variability. A more complete model would likely incorporate the photometric filter measurements (u, g, r, i, z) that were excluded from this analysis for brevity.
+
+```{r}
+plot(expanded_model$residuals, expanded_model$fitted.values,
+     main = "Residuals vs Fitted: Expanded Model",
+     ylab = "Residuals", xlab = "Fitted Values",
+     pch = 19, col = rgb(0, 0, 0, alpha = 0.1))
+abline(h = 0, col = "red", lty = 2)
+```
+
+The persistence of this banding in the residual plot confirms what the R² suggested; that knowing an object's class gets you in the right ballpark, but within each class (especially quasars) there is substantial spread in redshift that RA alone cannot explain. The model has improved, but the underlying relationship is more complex than a linear model with these two predictors can capture.
+
+------------------------------------------------------------------------
+
+# Conclusion
+
+This analysis examined whether right ascension and stellar classification are associated with the redshift of celestial objects in the SDSS dataset. A chi-squared test provided strong statistical evidence that stellar classification (star vs. non-star) and redshift category (low/mid/high) are not independent. Two-sample t-tests confirmed that non-stars have significantly higher mean redshift than stars. However, a closer examination revealed that object class (specifically the distinction between galaxies and quasars) acts as a confounding variable: collapsing these two types into a single "non-star" group obscures meaningfully different redshift behaviors. After controlling for full object class in a multivariate regression, the model better captures the structure of the data.
+
+Several extensions remain possible. One could investigate whether declination (delta) adds predictive power beyond right ascension, examine whether the three object classes show different RA distributions across the sky, or explore whether the relationship between RA and redshift holds within each class separately. One unexplained feature of the data worth flagging is the two apparent gaps in the Right Ascension distribution, which is visible both in the RA histogram and the RA vs. Redshift scatterplot, where observations drop to nearly zero around 75° and 300°. These gaps likely reflect the boundaries of SDSS survey fields, where the telescope simply did not observe, but their precise cause warrants further investigation. These directions, among others, could form the basis of a more comprehensive investigation.
