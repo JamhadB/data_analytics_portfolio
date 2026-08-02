@@ -2,7 +2,7 @@
 
 This is a collection of data analytics projects I completed for various academic, self-learning, and applied purposes. They are presented as R markdown documents, python notebooks, and pdfs.
 
-I have a BS Physics degree from the University of Texas at Austin and am a Marine Corps veteran currently transitioning into data-focused roles. My projects reflect a statistics-first approach: hypothesis testing, careful exploratory analysis, and honest reporting of model limitations, rather than just running an algorithm and reporting a number.
+I have a BS in Physics from the University of Texas at Austin and am a Marine Corps veteran currently transitioning into data-focused roles. My projects reflect a statistics-first approach: hypothesis testing, careful exploratory analysis, and honest reporting of model limitations, rather than just running an algorithm and reporting a number.
 
 *Data used in these projects is for demonstration and educational purposes only.*
 
