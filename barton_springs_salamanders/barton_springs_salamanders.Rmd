@@ -2,10 +2,14 @@
 title: "Barton Springs Salamanders"
 author: "Jamhad Byers & Nick Gonzalez"
 date: "2025-03-02"
-output: html_document
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
 ---
 
-![Image from <https://www.kut.org/austin/2017-10-16/a-remodel-hopes-to-replenish-austins-endangered-barton-springs-salamander>](https://npr.brightspotcdn.com/dims4/default/d4d9ffb/2147483647/strip/true/crop/1376x1102+0+0/resize/880x705!/quality/90/?url=http%3A%2F%2Fnpr-brightspot.s3.amazonaws.com%2Flegacy%2Fsites%2Fkut%2Ffiles%2F201710%2Fbssalf1a__2_.jpg)
+<!--![Image from <https://www.kut.org/austin/2017-10-16/a-remodel-hopes-to-replenish-austins-endangered-barton-springs-salamander>](https://npr.brightspotcdn.com/dims4/default/d4d9ffb/2147483647/strip/true/crop/1376x1102+0+0/resize/880x705!/quality/90/?url=http%3A%2F%2Fnpr-brightspot.s3.amazonaws.com%2Flegacy%2Fsites%2Fkut%2Ffiles%2F201710%2Fbssalf1a__2_.jpg)-->
 
 ```{r global_options, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
@@ -22,7 +26,9 @@ knitr::opts_chunk$set(echo = TRUE,
 
 [**The Barton Springs Salamanders DO and Flow**](https://data.austintexas.gov/Environment/Barton-Springs-Salamanders-DO-and-Flow/pyic-v8yf/about_data) **data-set from the City of Austin provides measurements of dissolved oxygen (DO) and spring flow rates at Barton Springs, an important habitat for the endangered Barton Springs Salamander (Eurycea sosorum). The data-set includes time-series records of DO concentrations (in mg/L) and spring flow (in cubic feet per second) collected from various sites within the Barton Springs complex. These environmental factors are critical indicators of water quality and habitat health for the salamander population. By analyzing trends in DO levels and flow rates, researchers and conservationists can assess the impact of environmental changes, groundwater conditions, and human activity on the ecosystem.**
 
-**This dataset is interesting do to its relevance in the broader conversation about climate change and the methods used to keep track of the nuanced and widespread effects. For our purposes here, the data will be used to asses dissolved oxygen levels, salamander counts, flow severity, and sample areas of four sights in the Austin area. Each row represents a measurement on a particular day at a particular site.**
+**This dataset is interesting due to its relevance in the broader conversation about climate change and the methods used to keep track of the nuanced and widespread effects. For our purposes here, the data will be used to asses dissolved oxygen levels, salamander counts, flow severity, and sample areas of four sites in the Austin area. Each row represents a measurement on a particular day at a particular site.**
+
+<!--why DO and flow matter biologically?-->
 
 ### Original Variables
 
@@ -50,11 +56,7 @@ Before cleaning, the set contains 50,068 rows and 22 columns.
 
 ## Methods
 
-Our primary research questions are as follows;
-
-> 1.) Does water Filter Fraction (FILTER), which refers to whether the water sample was filtered before it was analyzed, influence the Dissolved Oxygen (in mg/L) measurements?
-
-> 2.) How do dissolved oxygen (DO) levels vary across different spring sites, and what is their relationship with seasonal changes?
+This analysis investigates how dissolved oxygen (DO) levels vary across different Barton Springs sites, and whether that variation is confounded by differences in survey effort (area sampled) or salamander detection rates across sites. An initial question regarding whether filter fraction (dissolved vs. total) affects DO readings was set aside, as filter type was inconsistently recorded across site visits and would have required a separate data structure to address properly. This is a natural extension for future work.
 
 ### Loading Packages
 
@@ -114,48 +116,51 @@ unique(water$UNIT)
 
 ### Data Cleaning
 
-After reviewing the original dataset and what is important for analysis, the following is the cleaning done to achieve the desired new dataset to work with.
+The raw dataset stores each measurement as its own row, with the specific measurement type recorded in `PARAMETER` and its value in `RESULT`. This makes metics from a single site visit appear as different observations (rows). To analyze relationships between these variables, the data needs to be reshaped so that each row represents a single site visit, with each measurement type as its own column.
+
+Several complications arose in this reshaping process, worth noting explicitly:
+
+> 1.) Some site visits included multiple sub-samples (i.e measurements taken at different depths or along different survey transects on the same day). Rather than treating these as separate observations (which would fragment a single visit across multiple rows) or arbitrarily keeping only one, replicate values were averaged together to produce a single representative value per site per day.
+
+> 2.) The original sample date included exact time of day, and different measurements taken during the same visit were sometimes logged at slightly different timestamps. Grouping by the full timestamp caused measurements from the same visit to be split into separate rows. This was resolved by grouping on the calendar date alone, which correctly reunites same-day measurements.
+
+> 3.) An earlier version of the cleaning step used to filter for site names used `==` to filter to the four sites of interest, which unintentionally checks values by position rather than membership, silently dropping some valid rows. This was corrected using `%in%`, which properly matches each row against the full list of target sites regardless of order.
+
+After reviewing the original dataset and what is important for this analysis, the following is the cleaning done to achieve the desired new dataset to work with.
 
 ```{r}
 # cleaned data, all managed in one spot and edited throughout the analysis
 water_cleaned <- water |>
-  # removing redundancy
-  pivot_wider( 
-      # the values of the variable `parameter` will become variables 
-      names_from = PARAMETER, 
-      # the cell values values of `result` will match the corresponding variable
-      values_from = RESULT) |>
+  mutate(sample_day = as_date(mdy_hms(SAMPLE_DATE))) |>
+  pivot_wider(
+    id_cols = c(sample_day, SITE_NAME),
+    # the values of the variable `parameter` will become variables
+    names_from = PARAMETER,
+    # the cell values of `result` will match the corresponding variable
+    values_from = RESULT,
+    # averages replicate sub-samples
+    values_fn = ~ mean(.x, na.rm = TRUE)
+  ) |>
   # selecting variables for analysis and changing names
   select(
-    sampledate = `SAMPLE_DATE`,
-    site = `SITE_NAME`,
-    DO = `DISSOLVED OXYGEN`,
-    Flowcode = "FLOW SEVERITY CODE (1=NONE;2=LOW;3=NORM;4=FLOOD;5=HIGH;6=DRY)",
-    salamanders = "NUMBER OF AUSTIN BLIND SALAMANDERS PHOTOGRAPHED",
-    area = "AREA SAMPLED",
-    units = UNIT,
-    filter = FILTER
-  ) |>
-  # fixing sampledate format
-  mutate(
-    sampledate = as_datetime(mdy_hms(sampledate))
+  sampledate = sample_day,
+  site = SITE_NAME,
+  DO = `DISSOLVED OXYGEN`,
+  Flowcode = "FLOW SEVERITY CODE (1=NONE;2=LOW;3=NORM;4=FLOOD;5=HIGH;6=DRY)",
+  salamanders = "NUMBER OF AUSTIN BLIND SALAMANDERS PHOTOGRAPHED",
+  area = "AREA SAMPLED",dat
   ) |>
   # choosing specific sites
-  filter(site == c("Barton Spring",
-                   "Eliza Spring",
-                   "Old Mill (Sunken Gardens) Spring",
-                   "Upper Barton Spring"),
-         # removing unused units
-         units != "Minutes", 
-         units != "gal/min",
-         units != "Cubic Feet Per Second",
-         units != "1-2: (Yes; No)",
-         units != "(%) Percent",
-         units != "Inches",
-         units != "Feet",
-         units != "MM",
-         units != "Feet per second")
+  filter(site %in% c("Barton Spring",
+                      "Eliza Spring",
+                      "Old Mill (Sunken Gardens) Spring",
+                      "Upper Barton Spring"))
+
+
+head(water_cleaned)
 ```
+
+After cleaning, the dataset contains site-visit-level observations for the four springs of interest, with dissolved oxygen, flow severity, salamander counts, and survey area as separate columns. It's worth noting that DO is measured far more frequently and consistently than salamander counts or area surveys, which appear to follow a more occasional or opportunistic sampling schedule. This is reflected in the higher proportion of missing values for those two variables. This is a limitation to keep in mind when interpreting any results involving salamander presence or survey area.
 
 ------------------------------------------------------------------------
 
@@ -163,14 +168,19 @@ water_cleaned <- water |>
 
 #### Summary Stats
 
+Before comparing DO across sites, it's worth first checking the overall distribution of DO values and how completely it was recorded at each site. This establishes a baseline understanding of the variable itself, and confirms that missing data isn't concentrated at any one site in a way that could bias later comparisons.
+
 ```{r}
 summary(water_cleaned$DO)
 
 water_cleaned |>
-  group_by(filter) |>
-  count(n()) |>
-  select(filter, 'count' = n)
+  group_by(site) |>
+    summarise(n = n(),
+              n_missing_DO = sum(is.na(DO))
+              )
 ```
+
+Missing DO readings are broadly similar in proportion across all four sites (32-41%), suggesting no single site's DO comparison is disproportionately affected by data availability.
 
 #### Dissolved Oxygen
 
