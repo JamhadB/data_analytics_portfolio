@@ -22,7 +22,7 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ------------------------------------------------------------------------
 
-## Barton Springs Salamanders
+# Barton Springs Salamanders
 
 [**The Barton Springs Salamanders DO and Flow**](https://data.austintexas.gov/Environment/Barton-Springs-Salamanders-DO-and-Flow/pyic-v8yf/about_data) **data-set from the City of Austin provides measurements of dissolved oxygen (DO) and spring flow rates at Barton Springs, an important habitat for the endangered Barton Springs Salamander (Eurycea sosorum). The data-set includes time-series records of DO concentrations (in mg/L) and spring flow (in cubic feet per second) collected from various sites within the Barton Springs complex. These environmental factors are critical indicators of water quality and habitat health for the salamander population. By analyzing trends in DO levels and flow rates, researchers and conservationists can assess the impact of environmental changes, groundwater conditions, and human activity on the ecosystem.**
 
@@ -30,7 +30,7 @@ knitr::opts_chunk$set(echo = TRUE,
 
 <!--why DO and flow matter biologically?-->
 
-### Original Variables
+## Original Variables
 
 > `site_name` is, as the name suggest, the name of the site for that particular instance of data collection.
 
@@ -38,7 +38,7 @@ knitr::opts_chunk$set(echo = TRUE,
 
 > `parameter` `result` & `unit` are the measurement, numeric value of that measurement, and the units of that measurement respectively
 
-### Created Variables
+## Created Variables
 
 > `DO` is created from the `Dissolved Oxygen` value in `PARMETER`, and contains the numeric values of the measurement.
 
@@ -54,11 +54,11 @@ Before cleaning, the set contains 50,068 rows and 22 columns.
 
 ------------------------------------------------------------------------
 
-## Methods
+# Methods
 
 This analysis investigates how dissolved oxygen (DO) levels vary across different Barton Springs sites, and whether that variation is confounded by differences in survey effort (area sampled) or salamander detection rates across sites. An initial question regarding whether filter fraction (dissolved vs. total) affects DO readings was set aside, as filter type was inconsistently recorded across site visits and would have required a separate data structure to address properly. This is a natural extension for future work.
 
-### Loading Packages
+## Loading Packages
 
 ```{r}
 # Upload / install packages
@@ -66,7 +66,7 @@ library(tidyverse)
 library(plotROC) 
 ```
 
-### Importing the Data
+## Importing the Data
 
 ```{r water}
 water <- read_csv("Barton_Springs_Salamanders_DO_and_Flow_20250305.csv")
@@ -76,7 +76,7 @@ head(water)
 summary(water)
 ```
 
-### Choosing 4 Sites for Analysis
+## Choosing 4 Sites for Analysis
 
 ```{r}
 # site options
@@ -85,7 +85,7 @@ unique(water$SITE_NAME)
 
 **Our analysis will focus on the Barton Spring, Eliza Spring, Old Mill (Sunken Gardens) Spring, and Upper Barton Spring sites.**
 
-### Understanding Filter Fraction
+##  Understanding Filter Fraction
 
 ```{r}
 unique(water$FILTER)
@@ -93,7 +93,7 @@ unique(water$FILTER)
 
 **"Total" samples includes everything, from dissolved stuff tp particles floating in the sample (suspended solids). "Dissolved" samples only include the dissolved substances, the sample is passed through a filter first, which removes solids. "N/A" is currently unknown.**
 
-### Choosing Parameters to Review
+## Choosing Parameters to Review
 
 The paramters variable is a representation of what measurement was taken for that row. Here, we display all available measurements for analysis in the dataset
 
@@ -104,7 +104,7 @@ unique(water$PARAMETER)
 
 **The definitions of these were privded by Mr. Robert Clayton from the City of Austin Watershed Protection Department. For this analysis, the measurments of interest include `DISSOLVED OXYGEN`, `FLOW SEVERITY CODE (1=NONE;2=LOW;3=NORM;4=FLOOD;5=HIGH;6=DRY)`, `NUMBER OF AUSTIN BLIND SALAMANDERS PHOTOGRAPHED`, and `AREA SAMPLED`.**
 
-### Associated Units List
+## Associated Units List
 
 The units of interest all correspond to the measurements of interest, so we removed all unnecessary unit types from the dataset for analysis
 
@@ -114,7 +114,7 @@ unique(water$UNIT)
 
 **The units of interest are "MG/L", "Sq Ft", "None", and "Count". "None" is there for the flowcode category.**
 
-### Data Cleaning
+# Data Cleaning
 
 The raw dataset stores each measurement as its own row, with the specific measurement type recorded in `PARAMETER` and its value in `RESULT`. This makes metics from a single site visit appear as different observations (rows). To analyze relationships between these variables, the data needs to be reshaped so that each row represents a single site visit, with each measurement type as its own column.
 
@@ -169,9 +169,9 @@ After cleaning, the dataset contains site-visit-level observations for the four 
 
 ------------------------------------------------------------------------
 
-## Results
+# Results
 
-#### Summary Stats
+## Summary Stats
 
 Before comparing DO across sites, it's worth first checking the overall distribution of DO values and how completely it was recorded at each site. This establishes a baseline understanding of the variable itself, and confirms that missing data isn't concentrated at any one site in a way that could bias later comparisons.
 
@@ -186,6 +186,8 @@ water_cleaned |>
 ```
 
 Missing DO readings are broadly similar in proportion across all four sites (32-41%), suggesting no single site's DO comparison is disproportionately affected by data availability.
+
+## Survey Area by Site
 
 Before directly addressing how dissolved oxygen (DO) levels vary across different spring sites, and what is their relationship with seasonal changes is, it is important to know some things about the sites themselves. First, we looked at what the variation in areas sampled for each site looked like
 
@@ -210,6 +212,8 @@ water_cleaned |>
 ```
 
 **While the areas sampled for Eliza, Old Mill (Sunken Garden), and Upper Barton Springs were relatively consistent, Barton Spring's sample areas were much more spread, and also had the greatest outlier among them all.** This raises an important question to keep in mind going forward: if Barton Spring is sampled over a much larger and more variable area than the other sites, any observed differences in DO or salamander detection at Barton Spring may partly reflect differences in survey effort rather than the site itself
+
+## Samople Area Over Time
 
 We were then interested in the when theses surveys took place, and if anything could be noticed to that helps explain the Barton Springs outliers
 
@@ -245,6 +249,8 @@ water_cleaned |>
 
 **The highest survey area for Barton Spring is approximately 1827 Sq Ft, taking place on two occasions in late 2012/early 2013, with a third closely comparable outlier (1743 Sq Ft) later that year.**
 
+## DO Over Time
+
 With the exception of Barton Spring, most of the sites have consistent survey areas. How do their dissolved oxygen levels vary over time?
 
 ```{r}
@@ -268,6 +274,8 @@ One elevated DO reading at Eliza Spring in June 2014 (~21.5 mg/L, confirmed acro
 
 **DO levels appear broadly consistent over time across all sites, with the single exception of the Eliza Spring outlier noted above. This raises the question of how DO varies by site specifically.**
 
+## DO by Site
+
 ```{r}
 # log10(DO) by site
 water_cleaned |>
@@ -278,7 +286,7 @@ water_cleaned |>
 
 **DO levels are broadly similar in typical range across the four sites (median values cluster between roughly 5.5 and 7.5 mg/L), but with some notable site-specific patterns. Upper Barton Spring shows the highest typical DO of the four sites. Old Mill (Sunken Gardens) Spring has the tightest core distribution but includes several low-DO outliers, pulling down its overall range. Barton Spring shows the widest spread, including a few near-zero readings. Eliza Spring's single elevated outlier (~21.5 mg/L, discussed above) stands apart from an otherwise typical distribution.**
 
-#### Salamanders
+## Salamanders
 
 ```{r}
 water_cleaned |>
@@ -298,6 +306,8 @@ water_cleaned |>
 
 **Seems like the salamander counting for this view does not start until around 2015, or that there were no salamanders to count until then, and that they like Eliza Spring to most. Regardless, Eliza Spring's markedly higher salamander detection rate, combined with Barton Spring's earlier-noted variability in survey area, suggests that site-level differences in either measured DO or detected salamanders may partly reflect differences in sampling practices rather than the underlying spring conditions themselves.**
 
+## Flowcodes
+
 Given this is the case, Does flow perhaps effect DO?
 
 ```{r}
@@ -308,6 +318,8 @@ water_cleaned |>
 ```
 
 **This suggests that Barton Spring and Eliza Spring are somewhat over-represented in the dataset. Let's check for sampling country for each**
+
+## Inquaries Before Modeling
 
 ```{r}
 water_cleaned |>
@@ -338,7 +350,9 @@ water_cleaned |>
        y = "Frequency",
        caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
 ```
+Among the sites with any detections, the shape of the counts themselves also differs. Eliza Spring not only has far more site-visits with a detection, but also accounts for nearly all of the higher counts, while Barton Springand Old Mill (Sunken Gardens) Spring are limited to single-digit low counts. This reinforces the earlier point that Eliza Spring is functionally the "salamander site" in this dataset, both in how often they're found there and how many are found at once. This is worth keeping in mind as a confound when comparing DO or flow patterns across sites.
 
+Having looked at how DO, survey area, and salamander detections each vary across sites, the last piece of the confounding picture is flow itself. Since flow conditions can influence both DO and salamander activity, it's worth checking whether the four sites were even sampled under comparable flow regimes to begin with.
 
 ```{r}
 water_cleaned |>
@@ -346,13 +360,14 @@ water_cleaned |>
   ggplot() +
   geom_point(aes(x = sampledate, y = Flowcode, color = site)) +
   facet_wrap(~site) +
-  labs(title = "Flowcode Distributions by Spring",
-       x = "Flowcode",
-       y = "Frequency",
+  labs(title = "Flowcode Over Time by Spring",
+       x = "Sample Date",
+       y = "Flowcode",
        caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
 ```
-
-typical flowcode distributions for each
+Looking at flow conditions over time rather than just their overall frequency, Barton Spring's readings sit almost entirely at code 3 (NORM) across its full sampling window, with only a couple of LOW readings breaking that pattern. Eliza Spring, Old Mill, and
+Upper Barton Spring each show more scatter across the flow scale throughout their sampling periods, including a mix of LOW, NORM, and HIGH/DRY readings recorded within the same few years. There's no clear indication that any site was sampled disproportionately
+during a specific flow regime relative to its own history. The spread looks like normal seasonal or year-to-year variation rather than a shift in sampling protocol.
 
 ```{r}
 water_cleaned |>
@@ -366,7 +381,13 @@ water_cleaned |>
        caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
 ```
 
-Nick's Model
+Looking at the overall shape of these distributions confirms the pattern: Barton Spring's flow readings are heavily concentrated at code 3 (NORM), with a much smaller cluster at code 2 (LOW) and almost nothing else. Eliza Spring, Old Mill (Sunken Gardens) Spring, and Upper Barton Spring all show a similar peak at NORM but with more mass spread across LOW, FLOOD, HIGH, and DRY codes. In short, all four sites were sampled predominantly under normal flow conditions, which is reassuring for comparing DO across sites. However, Barton
+Spring in particular has very little representation at the flow extremes, so any site-level DO patterns tied to HIGH or DRY conditions are effectively only informed by the other three springs.
+
+# Modeling
+
+Having looked at DO, survey area, salamander detection, and flow separately across sites, the remaining question is whether the site-level differences in DO seen earlier hold up once we account for the overall time trend, and whether they can be explained away by survey effort or salamander detection rates. We start with a baseline model regressing DO on sampledate and site alone, which tells us whether site is a significant predictor of DO once time is controlled for. We'll then attempt to extend this model with area and
+salamanders as additional predictors, to test directly whether the site effect shrinks once those two variables are accounted for.
 
 ```{r}
 # Getting rid of NA values
@@ -377,10 +398,15 @@ lin_model <- lm(DO ~ sampledate + site, data = model_water)
 summary(lin_model)
 ```
 
+Site is a highly significant predictor of DO even after controlling for the overall downward trend over time (sampledate: -8.1e-05 mg/L per day, p < 2e-16). Relative to Barton Spring, Eliza Spring runs about 0.27 mg/L lower, Old Mill (Sunken Gardens) Spring about 0.36 mg/L lower, and Upper Barton Spring about 1.21 mg/L higher. All significant at p < 0.001. Upper Barton Spring stands out as the clear outlier here, with a DO coefficient roughly three to four times larger in magnitude than the other two site effects. The model as a whole explains a modest but real share of the variation in DO (R-squared = 0.20), leaving open the question of what's driving the remaining variation as well as whether the site effect itself is genuine or partly a stand-in for something else, like
+survey effort or salamander detection rates. That's what the combined model below attempts to test directly.
+
 ```{r}
 # Calculating RMSE
 sqrt(mean(resid(lin_model)^2))
 ```
+
+The RMSE of about 1.10 mg/L gives a sense of typical prediction error in the model's own units. On average, predictions for DO are off by roughly 1.1 mg/L. This is a meaningful chunk of the DO range seen across these sites (mostly 0–13 mg/L, aside from the single Eliza Spring outlier). This is the in-sample error; the next step checks how well the model holds up on data it hasn't seen, using cross-validation.
 
 ```{r}
 # Number of folds
@@ -401,22 +427,15 @@ perf_k <- NULL
 
 # Use a for-loop to get performance for each k-fold
 for(i in 1:k){
-  # Split data into train and test data 
+  # Split data into train and test data
   train_i <- shuffled_data |> filter(folds != i) #train data = all observations except in fold i
   test_i <- shuffled_data |> filter(folds == i) # test data = observations in fold i
   
   # Train model on train data (all but fold i)
-  train_model <- lm(DO ~ site + sampledate, 
-                    data = train_i)
-
-  # Performance listed for each test data = fold i
-  sal_per <- ggplot(test_i) +
-    geom_roc(aes(
-      # Outcome is DO
-      d = DO,
-      # Probability of Pokemon legendary status on logistic model
-      m = predict(train_model, newdata = test_i)[ ,2]))
-  # Save the AUC values
+  train_model <- lm(DO ~ site + sampledate,
+                     data = train_i)
+  
+  # Save the RMSE for this fold
   perf_k[i] <- sqrt(mean(resid(train_model)^2))
 }
 
@@ -427,87 +446,37 @@ perf_k
 mean(perf_k)
 ```
 
-My Model
+The average cross-validated RMSE across the 5 folds (~1.10 mg/L) is nearly identical to the in-sample RMSE reported above. This is a good sign: it means the model isn't overfitting to the training data, and the relationship between site, sampledate, and DO generalizes reasonably well to data the model hasn't seen. Site is a robust, if modest, predictor of DO. A pattern the combined model below now attempts to test for confounding.
+
 
 ```{r}
-# Getting rid of NA values
-model_water2 <- water_cleaned |>
-  filter(!is.na(salamanders))
-# Fit model
-lin_model2 <- lm(salamanders ~ sampledate + site, data = model_water2)
-summary(lin_model2)
+# Getting rid of NA values — now requires DO, salamanders, and area all present
+model_water <- water_cleaned |>
+  filter(!is.na(DO), !is.na(salamanders), !is.na(area))
+
+# Fit combined model
+lin_model <- lm(DO ~ sampledate + site + salamanders + area, data = model_water)
+summary(lin_model)
+
+# Sample size actually used
+nrow(model_water)
 ```
 
-```{r}
-# Calculating RMSE
-sqrt(mean(resid(lin_model2)^2))
-```
+This model demonstrates the approach we would use to formally test confounding. Adding salamanders and area as covariates alongside site and sampledate lets us see whether the site coefficients from the DO-only model shrink once detection rate and survey effort are
+accounted for. However, the output above cannot be trusted as a real result. Requiring DO, salamanders, and area to all be recorded on the same site visit leaves only 6 observations in the entire dataset, and only one site (Upper Barton Spring) even appears in the model. Eliza Spring and Old Mill drop out entirely. With 4 predictors fit to 6 points, the model has just one residual degree of freedom, which is why R-squared reaches 1 and the standard errors are implausibly small: the model is fitting noise perfectly, not capturing a real relationship.
 
-```{r}
-# Number of folds
-k = 5
+# Discussion
 
-# Setting a seed
-set.seed(322)
+This analysis set out to answer whether dissolved oxygen (DO) varies across the four Barton Springs sites, and whether that variation is confounded by survey effort (area sampled) or salamander detection rates. The baseline model confirms the first half of this question clearly: DO differs significantly by site, even after accounting for the overall downward trend in DO over time. Upper Barton Spring stands out in particular, running roughly 1.2 mg/L higher than Barton Spring on average, a much larger effect than the differences seen at Eliza Spring or Old Mill (Sunken Gardens) Spring. This tells us site is a real, if modest, predictor of DO (R-squared = 0.20), and that this relationship holds up under cross-validation rather than being an artifact of overfitting.
 
-# Randomly order rows in the dataset
-shuffled_data <- model_water2[sample(nrow(model_water2)),]
+The second half of the question, whether this site effect is confounded by survey effort or salamander detection, could not be answered with a formal combined model. Attempting to add area and salamanders as covariates alongside site and sampledate reduced the usable sample to just 6 site visits, since DO, area, and salamander counts are rarely all recorded on the same day at the same site. With more predictors than usable degrees of freedom, the resulting model fit the 6 points perfectly (R-squared = 1) but carries no real information about the broader dataset, and only one site even remained represented in it.
 
-# Create k folds in the dataset
-shuffled_data <- shuffled_data |>
-  mutate(folds = cut(seq(1:nrow(shuffled_data)), breaks = k, labels = FALSE))
+In the absence of a formal test, the descriptive patterns established earlier in this analysis offer a reasonable, if less rigorous, answer. Barton Spring is the clear outlier in survey effort, with a much wider and more variable sampled area than the other three sites (including a cluster of unusually large surveys in late 2012/early 2013). Yet Barton Spring's DO coefficient sits roughly in the middle of the four sites, not at either extreme. Therefore, a typical survey effort doesn't obviously translate into an a typical DO reading. Similarly, Eliza Spring is the clear outlier in salamander detection, accounting for the overwhelming majority of sightings and all of the highest counts in the dataset, yet its DO coefficient is only modestly below Barton Spring's and not dramatically different from Old Mill's, which had almost no salamander detections at all. Flow conditions were also examined as a third possible confound, and all four sites were sampled predominantly under normal (NORM) flow, with Barton Spring showing the least variation in flow regime of the four. Flow differences are also unlikely to explain the site-level DO pattern.
 
-# Initialize a vector to keep track of the performance for each k-fold
-perf_k <- NULL
+Taken together, this suggests that the site-level differences in DO are not simply a byproduct of how much area was surveyed or how often salamanders were spotted. The strongest DO effect (Upper Barton Spring) doesn't line up with either of the sites that stand out on effort or detection (Barton Spring and Eliza Spring, respectively). That said, this remains a descriptive, triangulated argument rather than a statistically confirmed one; a proper test of confounding would require substantially more consistent joint recording of DO, area, and salamander counts than this dataset currently provides, which stands as the clearest direction for future data collection or a follow-up analysis using a different modeling approach (e.g., one that doesn't require complete cases across all four variables simultaneously).
 
-# Use a for-loop to get performance for each k-fold
-for(i in 1:k){
-  # Split data into train and test data 
-  train_i <- shuffled_data |> filter(folds != i) #train data = all observations except in fold i
-  test_i <- shuffled_data |> filter(folds == i) # test data = observations in fold i
-  
-  # Train model on train data (all but fold i)
-  train_model <- lm(salamanders ~ site + sampledate, 
-                    data = train_i)
+A secondary limitation worth naming: even where data existed, salamander counts are a right-skewed count variable with a large number of zeros, which fits uneasily into an ordinary linear regression framework. A count-based model (e.g., Poisson or negative binomial) would likely be a better fit for that variable in future work, though the severe missingness problem would still need to be resolved first.
 
-  # Performance listed for each test data = fold i
-  sal_per <- ggplot(test_i) +
-    geom_roc(aes(
-      # Outcome is salamanders
-      d = salamanders,
-      # Probability of Pokemon legendary status on logistic model
-      m = predict(train_model, newdata = test_i)[ ,2]))
-  # Save the AUC values
-  perf_k[i] <- sqrt(mean(resid(train_model)^2))
-}
+# Reflection, Acknowledgements, & References.
 
-# Performance for each fold
-perf_k
-
-# Average performance over all k folds
-mean(perf_k)
-```
-
-```{r}
-water_cleaned |>
-  filter(salamanders != 0) |>
-  ggplot() +
-  geom_point(aes(y = salamanders, x = sampledate, color = site), alpha = 0.7) +
-  facet_wrap(~site) +
-  labs(title = "Salamander Measurements by Spring",
-       x = "Time",
-       y = "Salamander Count",
-       caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
-
-summary(water_cleaned$salamanders)
-
-water_cleaned |>
-  filter(!is.na(salamanders)) |>
-  count(n())
-```
-
-## Discussion
-
-## Reflection, Acknowledgements, & References. Measurement
-
-Huge thank you to [Mr.Robert Clayton](mailto:robert.clayton@austintexas.gov){.email}, who's help was integral to this work
+Huge thank you to [Mr.Robert Clayton](mailto:robert.clayton@austintexas.gov){.email}, [Nick Gonzalez](https://www.linkedin.com/in/nicholas-a-gonzalez/), and [Dr. Layla Guyot](https://www.linkedin.com/in/layla-guyot-5724213b/?locale=en) who's help was integral to this work.
