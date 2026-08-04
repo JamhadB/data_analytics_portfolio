@@ -10,9 +10,9 @@ I have a BS in Physics from the University of Texas at Austin and am a Marine Co
 
 ### Statistical Analysis (R)
 
-- **[Stellar Classification and Redshift: A Deeper Analysis of SDSS Data](./stellar-classification-analysis)**: Investigating whether right ascension and object classification are associated with redshift in Sloan Digital Sky Survey data. Uses chi-squared tests, two-sample t-tests, and multivariate regression — including identifying and correcting for a confounding variable that a simpler model missed.
+- **[Stellar Classification and Redshift: A Deeper Analysis of SDSS Data](https://github.com/JamhadB/data_analytics_portfolio/tree/main/stellar_classification_analysis)**: Investigating whether right ascension and object classification are associated with redshift in Sloan Digital Sky Survey data. Uses chi-squared tests, two-sample t-tests, and multivariate regression — including identifying and correcting for a confounding variable that a simpler model missed.
 
-- **[Barton Springs Salamander Analysis](./barton-springs-salamander-analysis)**: *(placeholder — description to come once expanded)*
+- **[Barton Springs Salamander Analysis](https://github.com/JamhadB/data_analytics_portfolio/tree/main/barton_springs_salamanders)**: Investigating dissolved oxygen (DO) variation across four Barton Springs sites, and whether that variation is confounded by differences in survey effort (area sampled) or salamander detection rates. Includes a detailed data cleaning process that identified and corrected a unit-mixing error (percent saturation vs. mg/L) hidden in the raw dataset, along with a comparison of DO, survey area, and salamander detections by site. Collaborative project with Nick Gonzalez.
 
 Tools: R, tidyverse, ggplot2
 
