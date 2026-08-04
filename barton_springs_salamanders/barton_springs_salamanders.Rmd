@@ -126,11 +126,16 @@ Several complications arose in this reshaping process, worth noting explicitly:
 
 > 3.) An earlier version of the cleaning step used to filter for site names used `==` to filter to the four sites of interest, which unintentionally checks values by position rather than membership, silently dropping some valid rows. This was corrected using `%in%`, which properly matches each row against the full list of target sites regardless of order.
 
+> 4.) Some Dissolved Oxygen readings were recorded in "% Saturation" rather than mg/L, alongside a separate, correctly-scaled mg/L reading for the same site visit. Since these two measurements represent fundamentally different scales, averaging them together during pivoting produced physically implausible DO values (e.g., 60+ mg/L). This was resolved by *excluding percent-saturation readings* before reshaping, ensuring *only mg/L values were averaged into the DO column*.
+
 After reviewing the original dataset and what is important for this analysis, the following is the cleaning done to achieve the desired new dataset to work with.
 
 ```{r}
 # cleaned data, all managed in one spot and edited throughout the analysis
 water_cleaned <- water |>
+  # exclude percent-saturation readings
+  filter(!(PARAMETER == "DISSOLVED OXYGEN" & UNIT == "(%) Percent")) |>
+  # uniform date format
   mutate(sample_day = as_date(mdy_hms(SAMPLE_DATE))) |>
   pivot_wider(
     id_cols = c(sample_day, SITE_NAME),
@@ -148,7 +153,7 @@ water_cleaned <- water |>
   DO = `DISSOLVED OXYGEN`,
   Flowcode = "FLOW SEVERITY CODE (1=NONE;2=LOW;3=NORM;4=FLOOD;5=HIGH;6=DRY)",
   salamanders = "NUMBER OF AUSTIN BLIND SALAMANDERS PHOTOGRAPHED",
-  area = "AREA SAMPLED",dat
+  area = "AREA SAMPLED",
   ) |>
   # choosing specific sites
   filter(site %in% c("Barton Spring",
@@ -182,28 +187,10 @@ water_cleaned |>
 
 Missing DO readings are broadly similar in proportion across all four sites (32-41%), suggesting no single site's DO comparison is disproportionately affected by data availability.
 
-#### Dissolved Oxygen
-
-Given the three categories of `filter`, what are their `DO` value distributions measured in mg/L?
-
-```{r}
-water_cleaned |>
-  filter(units == "MG/L") |>
-  ggplot() +
-  geom_histogram(aes(x = DO, fill = filter), alpha = 0.7) +
-  labs(title = "Dissolved Oxygen Distributions by Filter Fraction Category",
-       x = "Dissolved Oxygen",
-       y = "Frequency",
-       caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
-```
-
-**This clearly shows that all of the filter fraction categories have similar ranges--excluding outliers from "Dissolved"--just that N/A and Total have fewer measurments in their pools. This makes sense because (waiting for respoonse from MR. Clayton)**
-
 Before directly addressing how dissolved oxygen (DO) levels vary across different spring sites, and what is their relationship with seasonal changes is, it is important to know some things about the sites themselves. First, we looked at what the variation in areas sampled for each site looked like
 
 ```{r}
 water_cleaned |>
-  filter(units == "Sq Ft") |>
   ggplot() +
   geom_histogram(aes(x = area, fill = site), alpha = 0.7) +
   facet_wrap(~site) +
@@ -213,7 +200,6 @@ water_cleaned |>
        caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
 
 water_cleaned |>
-  filter(units == "Sq Ft") |>
   group_by(site) |>
   ggplot() +
   geom_boxplot(aes(y = area, fill = site), alpha = 0.7) +
@@ -223,23 +209,31 @@ water_cleaned |>
        caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
 ```
 
-**While the areas sampled for Eliza, Old Mill (Sunken Garden), and Upper Barton Springs were relatively consistent, Barton Spring's sample areas were much more spread, and also had the greatest outlier among them all.**
+**While the areas sampled for Eliza, Old Mill (Sunken Garden), and Upper Barton Springs were relatively consistent, Barton Spring's sample areas were much more spread, and also had the greatest outlier among them all.** This raises an important question to keep in mind going forward: if Barton Spring is sampled over a much larger and more variable area than the other sites, any observed differences in DO or salamander detection at Barton Spring may partly reflect differences in survey effort rather than the site itself
 
 We were then interested in the when theses surveys took place, and if anything could be noticed to that helps explain the Barton Springs outliers
 
 ```{r}
 water_cleaned |>
-  filter(units == "Sq Ft") |>
   ggplot() +
   geom_point(aes(x = sampledate, y = area, color = site), alpha = 0.2) +
-  facet_wrap(~site) 
+  facet_wrap(~site) +
+  labs(title = "Sample Area Over Time by Site",
+       x = "Sample Date",
+       y = "Area",
+       caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
 
 water_cleaned |>
-  filter(units == "Sq Ft") |>
   filter(site == "Barton Spring") |>
   ggplot() +
-  geom_point(aes(x = sampledate, y = area, color = site), alpha = 0.5)
+  geom_point(aes(x = sampledate, y = area, color = site), alpha = 0.5) +
+  labs(title = "Barton Spring Sample Area of Time",
+       x = "Sample Date",
+       y = "Area",
+       caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
 ```
+
+The Barton Spring outliers are not randomly distributed in time. All three occur within a narrow window around 2013, distinctly separated from the site's typical survey area range (roughly 100-1150 sq ft) seen across the rest of the 2004-2015 sampling period. This suggests a specific, likely temporary change in survey protocol or scope at that site around 2013, rather than ongoing variability. Without further documentation from the data source, the exact cause of this change can't be determined here. It is worth flagging as an anomaly isolated to a specific period rather than a general characteristic of Barton Spring sampling.
 
 Taking a closer look at the 3 highest area surveys for Barton Spring
 
@@ -249,18 +243,30 @@ water_cleaned |>
   slice_max(n = 3, area)
 ```
 
-**The highest survey area for Barton Spring is 6750 Sq Ft, taking place on the 3 different occasions listed.**
+**The highest survey area for Barton Spring is approximately 1827 Sq Ft, taking place on two occasions in late 2012/early 2013, with a third closely comparable outlier (1743 Sq Ft) later that year.**
 
-With the exception of Barton Spring, most the sites have consistent survey areas. How do their dissolved oxygen levels vary over time?
+With the exception of Barton Spring, most of the sites have consistent survey areas. How do their dissolved oxygen levels vary over time?
 
 ```{r}
 water_cleaned |>
   group_by(site) |>
   ggplot() +
   geom_point(aes(x = sampledate, y = DO, color = site), alpha = 0.6)
+  
+```
+Given how unusual this value is, it's worth verifying the units are correctly recorded and that this isn't an artifact of the sub-sample averaging step, rather than a genuine reading.
+
+```{r}
+water |>
+  filter(PARAMETER == "DISSOLVED OXYGEN", 
+         SITE_NAME == "Eliza Spring",
+         str_detect(SAMPLE_DATE, "2014")) |>
+  select(SAMPLE_DATE, SITE_NAME, RESULT, UNIT, FILTER)
 ```
 
-**DO levels relatively similar and do not vary much over time, with a few exceptions for Barton and Eliza Springs. DO variation by site?**
+One elevated DO reading at Eliza Spring in June 2014 (~21.5 mg/L, confirmed across two sub-samples on the same visit) stands out from the otherwise consistent 0-13 mg/L range seen throughout the dataset. Unlike the percent-saturation contamination addressed above, this value is correctly recorded in mg/L and is retained as a genuine observation, possibly reflecting a short-term supersaturation event (e.g. algal activity or aeration) rather than a data quality issue. This would be an excellent question for city officials who conducted the survey.
+
+**DO levels appear broadly consistent over time across all sites, with the single exception of the Eliza Spring outlier noted above. This raises the question of how DO varies by site specifically.**
 
 ```{r}
 # log10(DO) by site
@@ -270,7 +276,7 @@ water_cleaned |>
   geom_boxplot(aes(y = DO, color = site), alpha = 0.6)
 ```
 
-**DO variation for each site seems smallest for Upper Barton Spring, and a bit wider for the others.**
+**DO levels are broadly similar in typical range across the four sites (median values cluster between roughly 5.5 and 7.5 mg/L), but with some notable site-specific patterns. Upper Barton Spring shows the highest typical DO of the four sites. Old Mill (Sunken Gardens) Spring has the tightest core distribution but includes several low-DO outliers, pulling down its overall range. Barton Spring shows the widest spread, including a few near-zero readings. Eliza Spring's single elevated outlier (~21.5 mg/L, discussed above) stands apart from an otherwise typical distribution.**
 
 #### Salamanders
 
@@ -279,7 +285,7 @@ water_cleaned |>
   summarize("Total salamander count" = sum(salamanders, na.rm = T))
 ```
 
-**A total of 16 salamanders were counted across the entire dataset. This is not to say that there exist 16 salamanders in total though, as several are likely repeated counts over time.**
+**A total of 84 salamanders were counted across the entire dataset. This is not to say that there exist 84 salamanders in total though, as several are likely repeated counts over time.**
 
 How is this distributed by region?
 
@@ -290,9 +296,7 @@ water_cleaned |>
   geom_point(aes(x = sampledate, y = salamanders, color = site), alpha = 0.6)
 ```
 
-**seems like the salamander counting for this view does not start until around 2015, or that there were no salamanders to count until then, and that they like Eliza Spring to most.**
-
-**Barton Spring surprisingly lower than average DO when compared to the other springs.**
+**Seems like the salamander counting for this view does not start until around 2015, or that there were no salamanders to count until then, and that they like Eliza Spring to most. Regardless, Eliza Spring's markedly higher salamander detection rate, combined with Barton Spring's earlier-noted variability in survey area, suggests that site-level differences in either measured DO or detected salamanders may partly reflect differences in sampling practices rather than the underlying spring conditions themselves.**
 
 Given this is the case, Does flow perhaps effect DO?
 
@@ -303,17 +307,16 @@ water_cleaned |>
   facet_wrap(~site)
 ```
 
-**Seems a little like, for the variables we are interested in, Barton and Eliza Springs are over represented in the data. Let's check for sampling country for each**
+**This suggests that Barton Spring and Eliza Spring are somewhat over-represented in the dataset. Let's check for sampling country for each**
 
 ```{r}
 water_cleaned |>
   group_by(site) |>
-  filter(units == "MG/L") |>
   ggplot() +
   geom_bar(aes(x = site))
 ```
 
-**And wouldn't you believe it, they are indeed the most sampled sites from this view. lets check where salamanders are being looked for the most**
+**And wouldn't you believe it, they are indeed the most sampled sites from this view. Lets check where salamanders are being looked for the most**
 
 ```{r}
 water_cleaned |>
@@ -322,8 +325,7 @@ water_cleaned |>
   ggplot() +
   geom_bar(aes(x = site))
 ```
-
-Well this is odd... salamander count by spring?
+**Salamander detections were recorded at three of the four sites. Eliza Spring far more frequently than the others (over 40 site-visits with at least one detection), Old Mill less often, and Barton Spring with a single incidental detection. Upper Barton Spring had no recorded detections at all**
 
 ```{r}
 water_cleaned |>
@@ -337,7 +339,6 @@ water_cleaned |>
        caption = "Data from the City of Austin Barton Springs Salamanders DO and Flow")
 ```
 
-Wow, there really are only 2 sites that have salamanders confirmed to be in them from this data. It's possible the other sites we chose to ignore here have more but... this is pretty interesting. I also wanted to look at flowcodes for each over time
 
 ```{r}
 water_cleaned |>
